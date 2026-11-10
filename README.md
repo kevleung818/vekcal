@@ -1,6 +1,6 @@
 # Vekai Cal
 
-A quiet, local-first I Ching ritual app inspired by the supplied design blueprints. The experience combines a guided pause, six yarrow-stalk casts, King Wen hexagram mapping, Zhu Xi changing-line guidance, and an optional encrypted personal archive.
+A quiet, local-first I Ching ritual app inspired by the supplied design blueprints. The experience combines a guided pause, six casts using either the Da Yan yarrow-stalk method or the three-coin method, King Wen hexagram mapping, Zhu Xi changing-line guidance, and an optional encrypted personal archive.
 
 ## Run locally
 
@@ -12,9 +12,15 @@ npm run dev
 
 Open [http://localhost:4173](http://localhost:4173). The app has no package dependencies. Use HTTPS or localhost for Web Crypto and the encrypted archive.
 
+Use the header control to switch between day and night themes. The preference is stored locally in this browser.
+
 ## Casting and interpretation
 
-Each line uses the traditional Da Yan distribution: 6 (old yin) 1/16, 7 (young yang) 5/16, 8 (young yin) 7/16, and 9 (old yang) 3/16. Six lines are formed from the bottom upward. The app maps all 64 King Wen hexagrams and applies the supplied Zhu Xi changing-line count rules.
+Choose either casting method when entering a reading. The Da Yan method uses the traditional distribution: 6 (old yin) 1/16, 7 (young yang) 5/16, 8 (young yin) 7/16, and 9 (old yang) 3/16. The three-coin method simulates three independent coin faces per line: three tails produce 6 (old yin), one head produces 8 (young yin), two heads produce 7 (young yang), and three heads produce 9 (old yang). Six lines are formed from the bottom upward. Both methods map to the same 64 King Wen hexagrams and Zhu Xi changing-line count rules.
+
+Before casting, optionally select one reading category (fortune, love, illness, lost items, or litigation) and choose Traditional Chinese or Hong Kong Cantonese. Category text is matched against the resulting original hexagram and sourced from the attached interpretation tables. Illness readings are cultural divination text only, not medical advice or a diagnosis; seek qualified medical care for health concerns.
+
+Results include all seven reference fields for both the original and transformed hexagrams. Hong Kong Cantonese is selected by default because its source table includes every field: hexagram form, image, auspiciousness, interpretation, hexagram text, inference, and Great Image. Traditional Chinese remains selectable and displays the fields provided in its source table.
 
 ## Private archive
 

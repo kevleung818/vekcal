@@ -47,7 +47,7 @@ function validateLines(lines) {
     || ![6, 7, 8, 9].includes(line.value)
     || line.changing !== (line.value === 6 || line.value === 9)
   ))) {
-    throw new TypeError("Each line must be a consistent 6, 7, 8, or 9 yarrow result.");
+    throw new TypeError("Each line must be a consistent 6, 7, 8, or 9 casting result.");
   }
 }
 
@@ -71,6 +71,24 @@ export function castYao(randomValue = randomInt(16)) {
   if (randomValue <= 5) return { value: 7, yang: true, changing: false };
   if (randomValue <= 12) return { value: 8, yang: false, changing: false };
   return { value: 9, yang: true, changing: true };
+}
+
+export function castThreeCoins(coins = Array.from({ length: 3 }, () => randomInt(2))) {
+  if (
+    !Array.isArray(coins)
+    || coins.length !== 3
+    || coins.some((face) => face !== 0 && face !== 1)
+  ) {
+    throw new RangeError("A three-coin cast must contain exactly three 0 or 1 faces.");
+  }
+  const heads = coins.reduce((sum, face) => sum + face, 0);
+  const value = [6, 8, 7, 9][heads];
+  return {
+    value,
+    yang: value === 7 || value === 9,
+    changing: value === 6 || value === 9,
+    coins: [...coins],
+  };
 }
 
 export function resolveHexagrams(lines) {
@@ -152,4 +170,15 @@ export function hexagramList() {
     lower: lower.symbol,
     upper: upper.symbol,
   }));
+}
+
+export function formatHexagramOrdinal(number) {
+  if (!Number.isInteger(number) || number < 1 || number > 64) {
+    throw new RangeError("Hexagram number must be from 1 to 64.");
+  }
+  const numerals = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九"];
+  const tens = Math.floor(number / 10);
+  const ones = number % 10;
+  if (tens === 0) return `第${numerals[number]}卦`;
+  return `第${tens === 1 ? "" : numerals[tens]}十${ones === 0 ? "" : numerals[ones]}卦`;
 }

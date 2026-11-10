@@ -1,7 +1,7 @@
 {
   "name": "Vekai Cal — 靜心觀卦",
   "short_name": "Vekai Cal",
-  "description": "以大衍筮法靜心觀卦，為當下留一點空間。",
+  "description": "以大衍筮法或三錢法靜心觀卦，為當下留一點空間。",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#11110f",

@@ -1,6 +1,8 @@
 import {
+  castThreeCoins,
   castYao,
   describeFocus,
+  formatHexagramOrdinal,
   getInterpretationFocus,
   resolveHexagrams,
 } from "./core.js";
@@ -13,11 +15,34 @@ import {
   saveReading,
   unlockArchive,
 } from "./archive.js";
+import {
+  getCategoryInterpretation,
+  INTERPRETATION_CATEGORIES,
+} from "./interpretations.js";
+import {
+  getHexagramDetails,
+  HEXAGRAM_DETAIL_FIELDS,
+} from "./hexagram-details.js";
 
 const app = document.querySelector("#app");
+function loadTheme() {
+  try {
+    return localStorage.getItem("vekai-cal-theme") === "day" ? "day" : "night";
+  } catch (error) {
+    console.error("Saved color theme could not be loaded.", error);
+    return "night";
+  }
+}
+
 const state = {
+  theme: loadTheme(),
   phase: "prepare",
   lines: [],
+  method: "yarrow",
+  category: "",
+  language: "zh-HK",
+  pendingCoins: null,
+  isCasting: false,
   question: "",
   breathActive: false,
   audioEnabled: false,
@@ -30,6 +55,13 @@ const state = {
 
 const lineNames = ["初爻", "二爻", "三爻", "四爻", "五爻", "上爻"];
 const resultName = (lines) => resolveHexagrams(lines);
+
+function applyTheme() {
+  document.documentElement.dataset.theme = state.theme;
+  document.querySelector('meta[name="theme-color"]').content = state.theme === "day" ? "#f3efe6" : "#11110f";
+}
+
+applyTheme();
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (character) => ({
@@ -70,6 +102,42 @@ function currentResult() {
   return { original, changed, focus, guidance: describeFocus(focus, original, changed) };
 }
 
+function hexagramDetailCard(hexagram, title) {
+  const details = getHexagramDetails(hexagram.number, state.language);
+  const rows = HEXAGRAM_DETAIL_FIELDS
+    .map(([key, label]) => `<div class="detail-row"><dt>${label}</dt><dd>${details[key] ? escapeHtml(details[key]) : '<span class="detail-unavailable">此語言版本未提供</span>'}</dd></div>`)
+    .join("");
+  return `<article class="hexagram-detail">
+    <div class="hexagram-detail__heading"><span class="eyebrow">${title}</span><h3>${escapeHtml(hexagram.name)} <span>${formatHexagramOrdinal(hexagram.number)}</span></h3></div>
+    <dl class="detail-list">${rows}</dl>
+  </article>`;
+}
+
+function methodCard() {
+  if (state.method === "coins") {
+    return `<section class="side-card"><div class="side-card__top"><span class="eyebrow">THE METHOD</span><span class="side-index">02</span></div><h3>三錢法</h3><p>每爻擲三枚銅錢一次，由初爻往上共六次。字面為正、花面為反；三正為老陽、三反為老陰，皆為變爻。</p><div class="probability-row"><span>三正 · 9 老陽</span><span>1 / 8</span></div><div class="probability-row"><span>二正 · 7 少陽</span><span>3 / 8</span></div><div class="probability-row"><span>一正 · 8 少陰</span><span>3 / 8</span></div><div class="probability-row"><span>三反 · 6 老陰</span><span>1 / 8</span></div></section>`;
+  }
+  return `<section class="side-card"><div class="side-card__top"><span class="eyebrow">THE METHOD</span><span class="side-index">01</span></div><h3>大衍筮法</h3><p>古法的機率分布，不是均等的隨機。老陰、少陽、少陰、老陽，各有其數。</p><div class="probability-row"><span>6 · 老陰</span><span>1 / 16</span></div><div class="probability-row"><span>7 · 少陽</span><span>5 / 16</span></div><div class="probability-row"><span>8 · 少陰</span><span>7 / 16</span></div><div class="probability-row"><span>9 · 老陽</span><span>3 / 16</span></div></section>`;
+}
+
+function castingVisual() {
+  if (state.method !== "coins") {
+    return `<div class="casting-figure ${state.lines.length < 6 ? "casting-figure--waiting" : ""}" aria-hidden="true">
+      <div class="coin coin--back"><span>易</span></div><div class="coin coin--front"><span> vekai </span></div>
+      <span class="casting-glow"></span>
+    </div>`;
+  }
+  const coins = state.pendingCoins ?? state.lines.at(-1)?.coins ?? null;
+  const faces = coins?.map((face) => face ? "字" : "花") ?? ["擲", "三", "錢"];
+  const label = coins ? `三枚銅錢結果：${faces.join("、")}` : "三枚銅錢，準備擲出";
+  return `<div class="casting-figure coin-figure ${state.isCasting ? "is-casting" : state.lines.length < 6 ? "casting-figure--waiting" : ""}">
+    <div class="coin-tray" role="img" aria-label="${label}">
+      ${faces.map((face, index) => `<span class="coin coin--toss coin--toss-${index + 1}">${face}</span>`).join("")}
+    </div>
+    <span class="casting-glow" aria-hidden="true"></span>
+  </div>`;
+}
+
 function phaseContent() {
   if (state.phase === "prepare") {
     return `<section class="ritual-state" aria-labelledby="phase-title">
@@ -92,31 +160,52 @@ function phaseContent() {
       <p class="muted-copy">用一句話記下心中的問題。這段文字只保存在目前的瀏覽器頁面；若選擇典藏，會以你的密語加密。</p>
       <label class="field-label" for="question">你的問題 <span>選填</span></label>
       <textarea id="question" maxlength="240" rows="3" placeholder="例如：面對眼前的轉變，我可以如何準備？">${escapeHtml(state.question)}</textarea>
+      <label class="field-label" for="casting-method">起卦方法</label>
+      <select id="casting-method">
+        <option value="yarrow" ${state.method === "yarrow" ? "selected" : ""}>大衍筮法（蓍草機率）</option>
+        <option value="coins" ${state.method === "coins" ? "selected" : ""}>三錢法（每爻擲三枚銅錢）</option>
+      </select>
+      <fieldset class="choice-group">
+        <legend class="field-label">占問分類 <span>選填，可選一個方向</span></legend>
+        <div class="choice-tags" role="group" aria-label="占問分類">
+          ${INTERPRETATION_CATEGORIES.map((category) => `<button type="button" class="choice-tag" data-action="select-category" data-category="${category}" aria-pressed="${state.category === category}">${category}</button>`).join("")}
+        </div>
+        <small class="choice-note">選擇後，完成起卦會顯示該分類的卦象參考。</small>
+      </fieldset>
+      <fieldset class="choice-group">
+        <legend class="field-label">解讀語言</legend>
+        <div class="choice-tags" role="group" aria-label="解讀語言">
+          <button type="button" class="choice-tag" data-action="select-language" data-language="zh-Hant" aria-pressed="${state.language === "zh-Hant"}">繁體中文</button>
+          <button type="button" class="choice-tag" data-action="select-language" data-language="zh-HK" aria-pressed="${state.language === "zh-HK"}">香港廣東話</button>
+        </div>
+        <small class="choice-note">香港廣東話版本包含完整七項參考欄位；繁體中文版本依原表提供欄目顯示。</small>
+      </fieldset>
       <div class="ritual-actions">${button("開始揲筮", "begin-casting", "button button--primary")}
-        <span class="micro-note">大衍筮法 · 一爻由下而上，共六爻</span></div>
+        <span class="micro-note">${state.method === "coins" ? "三錢法 · 每爻擲三枚，由下而上共六次" : "大衍筮法 · 一爻由下而上，共六爻"}</span></div>
     </section>`;
   }
   if (state.phase === "casting") {
     const count = state.lines.length;
+    const coinLabel = (line) => {
+      const heads = line.coins.filter(Boolean).length;
+      return heads === 0 ? "三反" : `${heads}正`;
+    };
     return `<section class="ritual-state ritual-state--casting" aria-labelledby="phase-title">
       <div class="state-overline">03 / CAST THE LINES</div>
       <h2 id="phase-title">一爻一念，慢慢成卦。</h2>
-      <p class="muted-copy">每次按下按鈕，完成一次蓍草分筮。由初爻起，六次自下而上。</p>
+      <p class="muted-copy">${state.method === "coins" ? "每次擲出三枚銅錢，記下正反面。由初爻起，六次自下而上。" : "每次按下按鈕，完成一次蓍草分筮。由初爻起，六次自下而上。"}</p>
       <div class="casting-layout">
-        <div class="casting-figure ${count < 6 ? "casting-figure--waiting" : ""}" aria-hidden="true">
-          <div class="coin coin--back"><span>易</span></div><div class="coin coin--front"><span> vekai </span></div>
-          <span class="casting-glow"></span>
-        </div>
+        ${castingVisual()}
         <div class="line-ledger" aria-label="卦爻進度">
           ${[5, 4, 3, 2, 1, 0].map((index) => state.lines[index]
-            ? `<div class="ledger-row"><span>${lineNames[index]}</span>${lineMarkup(state.lines[index], index + 1)}<small>${state.lines[index].changing ? "動" : "靜"}</small></div>`
+            ? `<div class="ledger-row"><span>${lineNames[index]}</span>${lineMarkup(state.lines[index], index + 1)}<small>${state.method === "coins" ? coinLabel(state.lines[index]) : state.lines[index].changing ? "動" : "靜"}</small></div>`
             : `<div class="ledger-row ledger-row--empty"><span>${lineNames[index]}</span><span class="ledger-placeholder"></span><small>待占</small></div>`).join("")}
         </div>
       </div>
       <div class="casting-footer"><div class="progress-label"><span>第 ${Math.min(count + 1, 6)} / 6 爻</span><span>${count} 爻已成</span></div><div class="progress-track"><span style="width:${count / 6 * 100}%"></span></div>
-        ${button(count < 6 ? (count === 0 ? "揲筮第一爻" : "揲筮下一爻") : "卦象已成", "cast-line", "button button--primary", count >= 6 ? "disabled" : "")}
+        ${button(state.isCasting ? (state.method === "coins" ? "擲銅錢中…" : "蓍草分筮中…") : count < 6 ? (count === 0 ? (state.method === "coins" ? "擲出第一爻" : "揲筮第一爻") : (state.method === "coins" ? "擲出下一爻" : "揲筮下一爻")) : "卦象已成", "cast-line", "button button--primary", count >= 6 || state.isCasting ? "disabled" : "")}
         <button class="text-button sound-toggle" data-action="toggle-sound" aria-pressed="${state.audioEnabled}">♪ 音效與震動：${state.audioEnabled ? "開" : "關"}</button>
-        <p class="micro-note">古法機率 · 老陰 1/16　少陽 5/16　少陰 7/16　老陽 3/16</p>
+        <p class="micro-note">${state.method === "coins" ? "字面為正 · 三正老陽　兩正少陽　一正少陰　三反老陰" : "古法機率 · 老陰 1/16　少陽 5/16　少陰 7/16　老陽 3/16"}</p>
       </div>
     </section>`;
   }
@@ -125,17 +214,31 @@ function phaseContent() {
 
 function resultContent() {
   const { original, changed, focus, guidance } = currentResult();
+  const categoryReading = state.category
+    ? getCategoryInterpretation(original.number, state.category, state.language)
+    : "";
+  const languageLabel = state.language === "zh-HK" ? "香港廣東話" : "繁體中文";
   return `<section class="ritual-state result-state" aria-labelledby="phase-title">
-    <div class="state-overline">YOUR READING / #${String(original.number).padStart(2, "0")}</div>
+    <div class="state-overline">${state.method === "coins" ? "三錢法" : "大衍筮法"} · YOUR READING / #${String(original.number).padStart(2, "0")}</div>
     <h2 id="phase-title">答案不替你決定，<br>它陪你看清方向。</h2>
     <p class="muted-copy">靜下來，觀察此刻正在發生的變化。</p>
     ${state.question ? `<div class="question-note"><span>你所問</span><p>${escapeHtml(state.question)}</p></div>` : ""}
     <div class="reading-pair">
       <article class="reading-hex"><span class="eyebrow">本卦 · HEXAGRAM ${String(original.number).padStart(2, "0")}</span>${hexagramMarkup(state.lines)}<h3>${original.name}</h3><span>${original.upper.symbol}上${original.lower.symbol}下</span></article>
       <span class="reading-arrow" aria-hidden="true">→</span>
-      <article class="reading-hex"><span class="eyebrow">之卦 · TRANSFORMED</span>${hexagramMarkup(state.lines, true)}<h3>${changed.name}</h3><span>${changed.upper.symbol}上${changed.lower.symbol}下</span></article>
+      <article class="reading-hex"><span class="eyebrow">之卦 · TRANSFORMED</span>${hexagramMarkup(state.lines, true)}<h3>${changed.name} <span class="hexagram-ordinal">${formatHexagramOrdinal(changed.number)}</span></h3><span>${changed.upper.symbol}上${changed.lower.symbol}下</span></article>
     </div>
+    <section class="hexagram-details" aria-label="本卦與之卦詳解">
+      ${hexagramDetailCard(original, "本卦詳解")}
+      ${hexagramDetailCard(changed, "之卦詳解")}
+    </section>
+    ${state.language === "zh-Hant" ? '<p class="detail-source-note">繁體中文參考表未提供獨立的「解讀」與「卦辭」欄位；以上僅列出原表欄目。</p>' : ""}
     <div class="guidance-card"><span class="eyebrow">ZHU XI READING METHOD · ${focus.rule}</span><p>${guidance}</p><small>這是傳統研讀方向的提示，並非對未來的確定預言。</small></div>
+    ${categoryReading ? `<section class="category-reading" aria-labelledby="category-reading-title">
+      <div class="category-reading__top"><span class="eyebrow" id="category-reading-title">${escapeHtml(state.category)} · 分類解讀</span><span>${languageLabel}</span></div>
+      ${state.category === "疾病" ? '<p class="health-disclaimer">疾病分類內容僅供傳統文化參考，並非醫療診斷或治療建議，也不能用來預測病情。若有身體不適，請諮詢醫療專業人員；如有急症請立即求助。</p>' : ""}
+      <p class="category-reading__text">${escapeHtml(categoryReading)}</p>
+    </section>` : ""}
     <div class="ritual-actions">${button(state.saved ? "已典藏" : "加密典藏此卦", "save-reading", "button button--primary", state.saved ? "disabled" : "")}
       <button class="text-button" data-action="new-reading">重新開始 ↗</button></div>
     <p class="micro-note">${state.archiveUnlocked ? "典藏以 AES-GCM 加密，密語不會儲存；忘記密語便無法還原。" : "私人典藏可選擇啟用；加密密語只由你保管。"}</p>
@@ -157,21 +260,23 @@ function renderArchiveItems() {
   }
   return `<div class="archive-list">${state.archiveItems.map((reading) => {
     const { original, changed } = resultName(reading.lines);
-    return `<article class="archive-row"><div><span class="eyebrow">${new Date(reading.createdAt).toLocaleDateString("zh-Hant", { year: "numeric", month: "short", day: "numeric" })}</span><h4>${escapeHtml(original.name)} <span>→</span> ${escapeHtml(changed.name)}</h4><p>${escapeHtml(reading.question || "靜心一問")}</p></div><button class="icon-button" data-action="delete-reading" data-id="${escapeHtml(reading.id)}" aria-label="刪除這筆典藏" title="刪除">×</button></article>`;
+    const category = reading.category ? `<span class="archive-category">${escapeHtml(reading.category)} · ${reading.language === "zh-HK" ? "香港廣東話" : "繁體中文"}</span>` : "";
+    return `<article class="archive-row"><div><span class="eyebrow">${new Date(reading.createdAt).toLocaleDateString("zh-Hant", { year: "numeric", month: "short", day: "numeric" })}</span><h4>${escapeHtml(original.name)} <span>→</span> ${escapeHtml(changed.name)}</h4>${category}<p>${escapeHtml(reading.question || "靜心一問")}</p></div><button class="icon-button" data-action="delete-reading" data-id="${escapeHtml(reading.id)}" aria-label="刪除這筆典藏" title="刪除">×</button></article>`;
   }).join("")}</div>`;
 }
 
 function render() {
   app.innerHTML = `<header class="topbar"><a class="brand" href="#" aria-label="Vekai Cal 首頁"><span class="brand-mark">V</span><span>VEKAI<span class="brand-divider">/</span>CAL</span></a>
     <nav aria-label="主選單"><a href="#ritual">卜卦儀式</a><a href="#archive">私人典藏</a></nav>
+    <button class="theme-toggle" data-action="toggle-theme" aria-label="切換至${state.theme === "night" ? "日間" : "夜間"}模式" aria-pressed="${state.theme === "day"}"><span aria-hidden="true">${state.theme === "night" ? "☀" : "☾"}</span><span>${state.theme === "night" ? "日間模式" : "夜間模式"}</span></button>
     <button class="archive-control" data-action="${state.archiveUnlocked ? "lock-archive" : "open-archive"}">${state.archiveUnlocked ? "鎖定典藏" : state.archiveAvailable ? "解鎖典藏" : "建立典藏"}<span aria-hidden="true">↗</span></button></header>
     <main>
       <section class="hero"><div class="hero-kicker"><span class="kicker-line"></span> A QUIET SPACE FOR CLARITY <span class="kicker-line"></span></div>
         <h1>讓心，<em>看見</em><br>下一步。</h1><p>以古法揲筮，為當下留一點空間。<br>不預言命運，只陪你照見正在改變的事。</p>
         <div class="hero-seal" aria-hidden="true">易</div>
       </section>
-      <section class="workspace" id="ritual"><div class="ritual-card"><div class="card-top"><span><i></i> THE I CHING RITUAL</span><span>蓍草古法 · 01 — 06</span></div>${phaseContent()}</div>
-        <aside class="side-column"><section class="side-card"><div class="side-card__top"><span class="eyebrow">THE METHOD</span><span class="side-index">01</span></div><h3>大衍筮法</h3><p>古法的機率分布，不是均等的隨機。老陰、少陽、少陰、老陽，各有其數。</p><div class="probability-row"><span>6 · 老陰</span><span>1 / 16</span></div><div class="probability-row"><span>7 · 少陽</span><span>5 / 16</span></div><div class="probability-row"><span>8 · 少陰</span><span>7 / 16</span></div><div class="probability-row"><span>9 · 老陽</span><span>3 / 16</span></div></section>
+      <section class="workspace" id="ritual"><div class="ritual-card">      <div class="card-top"><span><i></i> THE I CHING RITUAL</span><span>${state.method === "coins" ? "三錢法" : "蓍草古法"} · 01 — 06</span></div>${phaseContent()}</div>
+        <aside class="side-column">${methodCard()}
         <section class="side-card side-card--archive" id="archive"><div class="side-card__top"><span class="eyebrow">YOUR PRIVATE ARCHIVE</span><span class="archive-status">${state.archiveUnlocked ? "已解鎖" : state.archiveAvailable ? "已加密" : "未啟用"}</span></div><h3>只屬於你的<br>卦象典藏。</h3><p>${archiveText()}</p>${renderArchiveItems()}<div class="archive-foot">${button(state.archiveUnlocked ? "鎖定典藏" : state.archiveAvailable ? "輸入密語解鎖" : "啟用加密典藏", state.archiveUnlocked ? "lock-archive" : "open-archive", "text-button")}</div></section></aside>
       </section>
       <section class="closing-note"><span>䷀</span><p>易，窮則變，變則通，通則久。</p><small>Pause. Reflect. Move with intention.</small></section>
@@ -269,16 +374,28 @@ function playTone() {
 async function castLine() {
   const buttonEl = document.querySelector('[data-action="cast-line"]');
   if (!buttonEl || buttonEl.disabled) return;
-  buttonEl.disabled = true;
-  buttonEl.textContent = "蓍草分筮中…";
+  const line = state.method === "coins" ? castThreeCoins() : castYao();
+  state.isCasting = true;
+  state.pendingCoins = line.coins ?? null;
+  render();
   document.querySelector(".casting-figure")?.classList.add("is-casting");
   await new Promise((resolve) => window.setTimeout(resolve, 750));
-  state.lines.push(castYao());
+  state.lines.push(line);
+  state.isCasting = false;
+  state.pendingCoins = null;
   playTone();
   if (state.lines.length === 6) {
     state.phase = "result";
   }
   render();
+  if (state.phase === "result") {
+    requestAnimationFrame(() => {
+      document.querySelector(".hexagram-details")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }
 }
 
 async function saveCurrentReading() {
@@ -287,6 +404,9 @@ async function saveCurrentReading() {
     await saveReading({
       createdAt: new Date().toISOString(),
       question: state.question,
+      method: state.method,
+      category: state.category,
+      language: state.language,
       lines: state.lines,
       original: original.name,
       changed: changed.name,
@@ -303,6 +423,11 @@ async function saveCurrentReading() {
 function resetReading() {
   state.phase = "prepare";
   state.lines = [];
+  state.method = "yarrow";
+  state.category = "";
+  state.language = "zh-HK";
+  state.pendingCoins = null;
+  state.isCasting = false;
   state.question = "";
   state.saved = false;
   state.breathActive = false;
@@ -314,10 +439,35 @@ app.addEventListener("click", async (event) => {
   const actionButton = event.target.closest("[data-action]");
   if (!actionButton) return;
   const action = actionButton.dataset.action;
+  if (action === "toggle-theme") {
+    state.theme = state.theme === "night" ? "day" : "night";
+    applyTheme();
+    let preferenceSaveFailed = false;
+    try {
+      localStorage.setItem("vekai-cal-theme", state.theme);
+    } catch (error) {
+      console.error("Color theme preference could not be saved.", error);
+      preferenceSaveFailed = true;
+    }
+    render();
+    if (preferenceSaveFailed) notify("主題已切換，但無法儲存偏好設定。", "error");
+  }
+  if (action === "select-category") {
+    const category = actionButton.dataset.category;
+    state.category = state.category === category ? "" : category;
+    render();
+    document.querySelector(`[data-action="select-category"][data-category="${state.category || category}"]`)?.focus();
+  }
+  if (action === "select-language") {
+    state.language = actionButton.dataset.language;
+    render();
+    document.querySelector(`[data-action="select-language"][data-language="${state.language}"]`)?.focus();
+  }
   if (action === "breathe") startBreath();
   if (action === "skip-breath") { state.phase = "intent"; render(); }
   if (action === "begin-casting") {
     state.question = document.querySelector("#question").value.trim();
+    state.method = document.querySelector("#casting-method").value;
     state.phase = "casting";
     render();
   }
@@ -352,6 +502,17 @@ app.addEventListener("click", async (event) => {
 app.addEventListener("submit", async (event) => {
   if (event.target.id !== "archive-form") return;
   await submitArchive(event);
+});
+
+app.addEventListener("input", (event) => {
+  if (event.target.id === "question") state.question = event.target.value;
+});
+
+app.addEventListener("change", (event) => {
+  if (event.target.id !== "casting-method") return;
+  state.method = event.target.value;
+  render();
+  document.querySelector("#casting-method").focus();
 });
 
 document.addEventListener("visibilitychange", () => {
