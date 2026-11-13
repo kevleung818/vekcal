@@ -1,37 +1,54 @@
-# Vekai Cal
+# Vekai
 
-A quiet, local-first I Ching ritual app inspired by the supplied design blueprints. The experience combines a guided pause, six casts using either the Da Yan yarrow-stalk method or the three-coin method, King Wen hexagram mapping, Zhu Xi changing-line guidance, and an optional encrypted personal archive.
+Vekai brings the number-based calculation service and Vekai Cal together under one site. The number calculator appears first; the I Ching Cal ritual follows. Visitors can preview both locally. In production, each delivered result is a separate HKD 81 Stripe Checkout purchase and is saved to the signed-in account.
 
 ## Run locally
 
-Requires Node.js 18 or newer. From this directory:
+Requires Node.js 18 or newer.
 
 ```sh
+npm install
+cp .env.example .env
 npm run dev
 ```
 
-Open [http://localhost:4173](http://localhost:4173). The app has no package dependencies. Use HTTPS or localhost for Web Crypto and the encrypted archive.
+Open [http://localhost:4173](http://localhost:4173). The calculation previews work without a database. Account creation, cloud records, and checkout require a PostgreSQL `DATABASE_URL`, verification-provider credentials, and Stripe credentials. Set `PAYWALL_ENABLED=true` only when Stripe is ready; production defaults to requiring checkout.
 
-Use the header control to switch between day and night themes. The preference is stored locally in this browser.
+## Render deployment
 
-## Casting and interpretation
+Create a Render Web Service from this repository and a Render PostgreSQL database. Set the following on the web service:
 
-Choose either casting method when entering a reading. The Da Yan method uses the traditional distribution: 6 (old yin) 1/16, 7 (young yang) 5/16, 8 (young yin) 7/16, and 9 (old yang) 3/16. The three-coin method simulates three independent coin faces per line: three tails produce 6 (old yin), one head produces 8 (young yin), two heads produce 7 (young yang), and three heads produce 9 (old yang). Six lines are formed from the bottom upward. Both methods map to the same 64 King Wen hexagrams and Zhu Xi changing-line count rules.
+- `NODE_ENV=production`
+- `APP_URL=https://<your-render-domain>`
+- `DATABASE_URL` from the Render PostgreSQL connection string
+- `ADMIN_EMAILS` as a comma-separated allowlist of administrator account email addresses
+- `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` from a GitHub OAuth App with callback URL `<APP_URL>/api/auth/github/callback`
+- `PAYWALL_ENABLED=true`
+- `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` from Stripe (test keys first)
+- `RESEND_API_KEY` and `EMAIL_FROM` for email verification
+- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` for mobile verification
 
-Before casting, optionally select one reading category (fortune, love, illness, lost items, or litigation) and choose Traditional Chinese or Hong Kong Cantonese. Category text is matched against the resulting original hexagram and sourced from the attached interpretation tables. Illness readings are cultural divination text only, not medical advice or a diagnosis; seek qualified medical care for health concerns.
+The database schema is applied on server startup. Configure a Stripe webhook at `https://<your-render-domain>/api/payments/stripe/webhook` for `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, and `checkout.session.expired`.
 
-Results include all seven reference fields for both the original and transformed hexagrams. Hong Kong Cantonese is selected by default because its source table includes every field: hexagram form, image, auspiciousness, interpretation, hexagram text, inference, and Great Image. Traditional Chinese remains selectable and displays the fields provided in its source table.
+The current price is server-controlled at HKD 81 per result for either service. Stripe Checkout hosts card entry; Vekai never receives or stores card details. Do not put credentials in the repository or browser code.
 
-## Private archive
+## Accounts and records
 
-The archive is optional and stored only in this browser's IndexedDB. Readings are encrypted with AES-GCM-256; a PBKDF2/SHA-256 key is derived from the passphrase with a per-archive random salt. The passphrase and derived key are not persisted. The archive locks when the page is hidden and when the page is closed. If the passphrase is lost, the archive cannot be recovered. Clearing browser data also deletes the archive.
+Users may register with either a verified email address or an international mobile number (`+` country code) and password. Email codes use Resend; SMS codes use Twilio. Passwords are stored as scrypt hashes and browser sessions use HttpOnly, SameSite cookies. If provider credentials are absent, sign-up reports that verification is not configured.
 
-## Limitations
+Display name and gender identity are optional profile fields. Paid calculation results and associated transaction records are tied to the account and can be reopened from My Results. Number inputs are used to calculate the result but the original sequence is omitted from saved result data. The existing optional device-only encrypted I Ching archive remains available for local readings.
 
-This app provides traditional study prompts, not a complete scholarly translation of the Yijing or professional advice. No LLM, account, analytics, or server-side reading storage is connected. The optional sound and vibration depend on browser/device support.
+## 管理後台
 
-## Tests
+將管理員已驗證的 Vekai 帳戶電郵加入 `ADMIN_EMAILS`（多個地址以逗號分隔），並設定 `GITHUB_CLIENT_ID`、`GITHUB_CLIENT_SECRET` 及 `APP_URL`。在 GitHub 建立 OAuth App，將 callback URL 設為 `<APP_URL>/api/auth/github/callback`。登入時必須使用 GitHub 已驗證的主要電郵，並與管理員名單及已驗證的 Vekai 帳戶相符；否則不會建立登入工作階段。網站頁首的「管理後台登入」會開啟 GitHub 授權。儀表板只提供營運統計及近期帳戶、付款、解讀清單，不提供修改或刪除操作，也不傳回解讀內容。
+
+## Services and languages
+
+網站介面與新解讀目前僅提供繁體中文。舊版多語系解讀仍保留相容性；健康相關卦象內容僅供文化參考，並非醫療建議。
+
+## Validation
 
 ```sh
 npm test
+npm run check
 ```

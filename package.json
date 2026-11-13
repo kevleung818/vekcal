@@ -5,6 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "node server.mjs",
+    "start": "node server.mjs",
+    "check": "node --check server.mjs && node --check server/admin.js && node --check server/auth.js && node --check server/db.js && node --check server/payments.js && node --check server/calculation-service.js && node --check src/app.js && node --check src/portal.js",
     "test": "node --test"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "express": "^4.22.2",
+    "pg": "^8.16.3",
+    "stripe": "^18.2.1"
   }
 }

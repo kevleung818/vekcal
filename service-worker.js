@@ -1,9 +1,10 @@
-const CACHE_NAME = "vekai-cal-v11";
+const CACHE_NAME = "vekai-cal-v19";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css",
   "./src/app.js",
+  "./src/portal.js",
   "./src/core.js",
   "./src/archive.js",
   "./src/interpretations.js",
@@ -28,6 +29,25 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET" || new URL(event.request.url).origin !== self.location.origin) return;
-  event.respondWith(caches.match(event.request).then((cached) => cached ?? fetch(event.request)));
+  const requestUrl = new URL(event.request.url);
+  if (
+    event.request.method !== "GET"
+    || requestUrl.origin !== self.location.origin
+    || requestUrl.pathname.startsWith("/api/")
+  ) return;
+  event.respondWith(
+    fetch(event.request)
+      .then((response) => {
+        if (response.ok && response.type === "basic") {
+          const responseCopy = response.clone();
+          event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseCopy)));
+        }
+        return response;
+      })
+      .catch(async (error) => {
+        const cached = await caches.match(event.request);
+        if (cached) return cached;
+        throw error;
+      }),
+  );
 });
