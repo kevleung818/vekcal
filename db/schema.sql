@@ -42,7 +42,7 @@ create index if not exists verification_challenges_lookup_idx
 create table if not exists readings (
   id text primary key,
   user_id text not null references users(id) on delete cascade,
-  service text not null check (service in ('numerology', 'iching')),
+  service text not null check (service in ('numerology', 'iching', 'pentagon', 'sequence')),
   locale text not null,
   status text not null default 'pending' check (status in ('pending', 'paid', 'failed')),
   result jsonb not null,
@@ -59,9 +59,15 @@ create table if not exists payments (
   stripe_payment_intent_id text,
   amount integer not null check (amount > 0),
   currency text not null,
+  product text,
   status text not null default 'pending' check (status in ('pending', 'paid', 'failed', 'expired')),
   created_at timestamptz not null default now(),
   paid_at timestamptz
 );
 
 create index if not exists payments_user_created_idx on payments (user_id, created_at desc);
+
+alter table payments add column if not exists product text;
+alter table readings drop constraint if exists readings_service_check;
+alter table readings add constraint readings_service_check
+  check (service in ('numerology', 'iching', 'pentagon', 'sequence'));

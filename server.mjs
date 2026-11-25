@@ -62,6 +62,10 @@ app.get("/api/config", (_request, response) => {
     billingRequired,
     checkoutAvailable: Boolean(pool && process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET && process.env.APP_URL),
     price: { amount: 81, currency: "HKD", perCalculation: true },
+    products: [
+      { id: "pentagon", name: "五軸解讀", amount: 89, currency: "HKD" },
+      { id: "sequence", name: "二十數解讀", amount: 390, currency: "HKD" },
+    ],
     supportedLocales: ["zh-TW"],
   });
 });

@@ -1,16 +1,9 @@
 import crypto from "node:crypto";
 import Stripe from "stripe";
-import {
-  describeFocus,
-  getInterpretationFocus,
-  resolveHexagrams,
-} from "../src/core.js";
-import { getCategoryInterpretation, INTERPRETATION_CATEGORIES } from "../src/interpretations.js";
-import { getHexagramDetails } from "../src/hexagram-details.js";
 import { requireDatabase } from "./db.js";
 import { calculateNumerology } from "./calculation-service.js";
+import { buildPentagonReading, buildSequenceReading, PRODUCT_PRICES } from "./reading-products.js";
 
-const PRICE_HKD_MINOR = 8100;
 const VALID_LOCALES = new Set(["en", "zh", "zh-TW", "zh-Hant", "zh-HK"]);
 
 function httpError(message, status) {
@@ -34,50 +27,6 @@ function cleanNumerologyResult(result) {
   return safe;
 }
 
-function buildIChingResult(input, locale) {
-  const lines = input?.lines;
-  const question = String(input?.question ?? "").trim().slice(0, 240);
-  const method = input?.method === "coins" ? "coins" : input?.method === "yarrow" ? "yarrow" : "";
-  const language = input?.language === "zh-HK" ? "zh-HK" : input?.language === "zh-Hant" ? "zh-Hant" : "";
-  const category = input?.category || "";
-  if (!method || !language) throw httpError("請選擇有效的易經起卦方法及解讀語言。", 400);
-  if (category && !INTERPRETATION_CATEGORIES.includes(category)) throw httpError("請選擇有效的解讀分類。", 400);
-  let result;
-  try {
-    const { original, changed } = resolveHexagrams(lines);
-    const focus = getInterpretationFocus(lines, original, changed);
-    result = {
-      service: "iching",
-      locale,
-      question,
-      method,
-      category,
-      language,
-      lines,
-      original: {
-        number: original.number,
-        name: original.name,
-        lower: original.lower.symbol,
-        upper: original.upper.symbol,
-        details: getHexagramDetails(original.number, language),
-      },
-      changed: {
-        number: changed.number,
-        name: changed.name,
-        lower: changed.lower.symbol,
-        upper: changed.upper.symbol,
-        details: getHexagramDetails(changed.number, language),
-      },
-      guidance: describeFocus(focus, original, changed),
-      categoryReading: category ? getCategoryInterpretation(original.number, category, language) : "",
-    };
-  } catch (error) {
-    if (error instanceof TypeError || error instanceof RangeError) throw httpError("卦象資料格式不正確。", 400);
-    throw error;
-  }
-  return result;
-}
-
 export function buildReadingResult(service, input, locale) {
   if (!VALID_LOCALES.has(locale)) throw httpError("請選擇有效的解讀語言。", 400);
   if (service === "numerology") {
@@ -85,29 +34,26 @@ export function buildReadingResult(service, input, locale) {
     const result = calculateNumerology(input?.input, { locale: calculationLocale });
     return { service, locale, result: cleanNumerologyResult(result) };
   }
-  if (service === "iching") return buildIChingResult(input, locale);
+  if (service === "pentagon") return { locale, ...buildPentagonReading(input) };
+  if (service === "sequence") return { locale, ...buildSequenceReading(input, locale) };
   throw httpError("請選擇有效的測算服務。", 400);
 }
 
-export async function createCheckout(request, response) {
+async function saveReading({ userId, service, locale, result, status, amount, paymentStatus }) {
   const db = requireDatabase();
-  const stripe = stripeClient();
-  const service = request.body?.service;
-  const locale = String(request.body?.locale ?? "zh-TW");
-  const result = buildReadingResult(service, request.body?.input, locale);
   const readingId = crypto.randomUUID();
   const paymentId = crypto.randomUUID();
   const client = await db.connect();
   try {
     await client.query("begin");
     await client.query(
-      "insert into readings (id, user_id, service, locale, status, result) values ($1, $2, $3, $4, 'pending', $5)",
-      [readingId, request.user.id, service, locale, result],
+      "insert into readings (id, user_id, service, locale, status, result) values ($1, $2, $3, $4, $5, $6)",
+      [readingId, userId, service, locale, status, result],
     );
     await client.query(
-      `insert into payments (id, user_id, reading_id, amount, currency, status)
-       values ($1, $2, $3, $4, 'hkd', 'pending')`,
-      [paymentId, request.user.id, readingId, PRICE_HKD_MINOR],
+      `insert into payments (id, user_id, reading_id, amount, currency, product, status, paid_at)
+       values ($1, $2, $3, $4, 'hkd', $5, $6, $7)`,
+      [paymentId, userId, readingId, amount, service, paymentStatus, paymentStatus === "paid" ? new Date() : null],
     );
     await client.query("commit");
   } catch (error) {
@@ -116,6 +62,45 @@ export async function createCheckout(request, response) {
   } finally {
     client.release();
   }
+  return { readingId, paymentId };
+}
+
+export async function createCheckout(request, response) {
+  const db = requireDatabase();
+  const service = request.body?.service;
+  const price = PRODUCT_PRICES[service];
+  if (!price) throw httpError("請選擇有效的測算服務。", 400);
+  const locale = String(request.body?.locale ?? "zh-TW");
+  const result = buildReadingResult(service, request.body?.input, locale);
+  if (service === "pentagon" || service === "sequence") {
+    const { readingId } = await saveReading({
+      userId: request.user.id,
+      service,
+      locale,
+      result,
+      status: "paid",
+      amount: price.amount,
+      paymentStatus: "paid",
+    });
+    response.status(201).json({
+      readingId,
+      amount: price.amount,
+      currency: "HKD",
+      status: "paid",
+      result,
+    });
+    return;
+  }
+  const stripe = stripeClient();
+  const { readingId, paymentId } = await saveReading({
+    userId: request.user.id,
+    service,
+    locale,
+    result,
+    status: "pending",
+    amount: price.amount,
+    paymentStatus: "pending",
+  });
 
   try {
     const baseUrl = process.env.APP_URL.replace(/\/$/, "");
@@ -128,8 +113,8 @@ export async function createCheckout(request, response) {
         quantity: 1,
         price_data: {
           currency: "hkd",
-          unit_amount: PRICE_HKD_MINOR,
-          product_data: { name: `Vekai ${service === "iching" ? "Cal" : "Calculation"} reading` },
+          unit_amount: price.amount,
+          product_data: { name: `Vekai ${price.label}` },
         },
       }],
       metadata: { reading_id: readingId, payment_id: paymentId, user_id: request.user.id, service },
@@ -137,7 +122,7 @@ export async function createCheckout(request, response) {
       cancel_url: `${baseUrl}/?checkout=cancel&readingId=${readingId}#${service}`,
     });
     await db.query("update payments set stripe_checkout_session_id = $1 where id = $2", [checkout.id, paymentId]);
-    response.status(201).json({ checkoutUrl: checkout.url, readingId, amount: PRICE_HKD_MINOR, currency: "HKD" });
+    response.status(201).json({ checkoutUrl: checkout.url, readingId, amount: price.amount, currency: "HKD" });
   } catch (error) {
     await db.query("update payments set status = 'failed' where id = $1", [paymentId]);
     await db.query("update readings set status = 'failed', result = '{}'::jsonb where id = $1", [readingId]);

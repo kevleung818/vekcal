@@ -1,7 +1,7 @@
 {
-  "name": "易經數典智鑑",
+  "name": "Vekai",
   "short_name": "Vekai",
-  "description": "以大衍筮法或三錢法靜心觀卦，為當下留一點空間。",
+  "description": "數字測算，以及登入後的五軸解讀與二十數解讀。",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#11110f",
