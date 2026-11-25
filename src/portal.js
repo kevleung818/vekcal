@@ -3,7 +3,7 @@ const calApp = document.querySelector("#app");
 const copy = {
   "zh-TW": {
     navNumber: "數字測算",
-    navCal: "易經觀卦",
+    navCal: "付費解讀",
     navResults: "我的結果",
     navProfile: "個人資料",
     navTransactions: "交易紀錄",
@@ -11,7 +11,7 @@ const copy = {
     numberEyebrow: "VEKAI / 測算服務",
     numberTitle: "易經數典智鑑",
     numberMotto: "見微知著 . 啟迪睿智生活",
-    numberDescription: "先進行數字測算，再向下體驗易經觀卦。",
+    numberDescription: "先進行數字測算。付費解讀需登入後選購。",
     numberLabel: "數字序列",
     numberHelp: "輸入 8 至 64 位數字。帳戶結果不會保存完整數字。",
     calculate: "開始測算",
@@ -38,10 +38,10 @@ const copy = {
     results: "已保存的結果",
     loading: "載入中…",
     noRows: "暫無紀錄。",
-    serviceName: { numerology: "數字測算", iching: "易經觀卦" },
+    serviceName: { numerology: "數字測算", pentagon: "五軸解讀", sequence: "二十數解讀" },
     language: "解讀語言",
     signinRequired: "請先登入或建立帳戶，再購買解讀。",
-    privacyNote: "前往付款時，測算資料會送至 Vekai。付款成功後結果和交易紀錄會保存於帳戶；未完成的結果會在付款頁面逾期後清除。信用卡資料由 Stripe 處理。",
+    privacyNote: "前往付款時，測算資料會送至 Vekai。付款成功後結果和交易紀錄會保存於帳戶。",
   },
 };
 
@@ -103,6 +103,37 @@ function resultMarkup(payload) {
     }).join("")}</div>`;
 }
 
+function radarMarkup(axes) {
+  const cx = 120;
+  const cy = 120;
+  const radius = 86;
+  const point = (index, scale) => {
+    const angle = -Math.PI / 2 + (index * 2 * Math.PI) / axes.length;
+    return [cx + radius * scale * Math.cos(angle), cy + radius * scale * Math.sin(angle)];
+  };
+  const polygon = (scale) => axes.map((_, index) => point(index, scale).join(",")).join(" ");
+  const scores = axes.map((axis, index) => point(index, axis.score / 100).join(",")).join(" ");
+  const spokes = axes.map((_, index) => {
+    const [x, y] = point(index, 1);
+    return `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}"></line>`;
+  }).join("");
+  const labels = axes.map((axis, index) => {
+    const [x, y] = point(index, 1.22);
+    return `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle">${escapeHtml(axis.label)} ${axis.score}</text>`;
+  }).join("");
+  return `<svg class="radar" viewBox="0 0 240 240" role="img" aria-label="五軸圖">
+    <g class="radar__grid">${[0.25, 0.5, 0.75, 1].map((scale) => `<polygon points="${polygon(scale)}"></polygon>`).join("")}${spokes}</g>
+    <polygon class="radar__score" points="${scores}"></polygon>
+    ${labels}
+  </svg>`;
+}
+
+function pentagonMarkup(result) {
+  return `${radarMarkup(result.axes)}
+    <ul class="choice-tags reading-tags">${result.tags.map((tag) => `<li class="choice-tag" aria-pressed="true">${escapeHtml(tag)}</li>`).join("")}</ul>
+    <p class="micro-note">數字：${result.numbers.map((number) => escapeHtml(number)).join("、")}</p>`;
+}
+
 function renderNumberResult(payload) {
   const output = document.querySelector("#number-result");
   output.innerHTML = resultMarkup(payload);
@@ -112,13 +143,13 @@ function renderNumberResult(payload) {
 
 function renderShell() {
   const text = t();
-  const activeSection = location.hash === "#cal" || location.hash === "#iching" ? "cal" : "number";
+  const activeSection = location.hash === "#readings" ? "readings" : "number";
   const themeIsNight = state.theme !== "day";
   portal.innerHTML = `<header class="portal-topbar">
     <a class="portal-brand" href="#home" aria-label="Vekai 首頁"><span class="brand-mark">V</span><span>VEKAI</span></a>
     <nav class="portal-app-switch" aria-label="Vekai 服務">
       <a href="#numerology" ${activeSection === "number" ? 'aria-current="page"' : ""}>${text.navNumber}</a>
-      <a href="#cal" ${activeSection === "cal" ? 'aria-current="page"' : ""}>${text.navCal}</a>
+      <a href="#readings" ${activeSection === "readings" ? 'aria-current="page"' : ""}>${text.navCal}</a>
     </nav>
     <div class="portal-controls">
       ${state.user ? `<nav class="portal-account-links" aria-label="帳戶功能">
@@ -152,7 +183,7 @@ function renderShell() {
           <div id="number-result" hidden></div>
         </section>
       </div>
-      <a class="cal-followup" href="#cal"><span class="eyebrow">下一步 / 易經觀卦</span><strong>向下，繼續易經觀卦 ↘</strong></a>
+      <a class="cal-followup" href="#readings"><span class="eyebrow">下一步 / 付費解讀</span><strong>向下，選購五軸或二十數解讀 ↘</strong></a>
     </section>
     <section id="portal-page" hidden></section>
   </main>`;
@@ -236,7 +267,7 @@ function paymentStatus(status) {
 }
 
 function serviceName(service) {
-  return ({ numerology: "數字測算", iching: "易經觀卦" })[service] || service;
+  return ({ numerology: "數字測算", pentagon: "五軸解讀", sequence: "二十數解讀" })[service] || service;
 }
 
 function adminPerson(row) {
@@ -305,12 +336,17 @@ async function renderRecord(id) {
     page.innerHTML = `<section class="portal-page-card"><h1>付款尚未確認</h1><p>Stripe 正在確認交易，請稍後到「我的結果」重新查看。</p><a href="#transactions">查看交易紀錄</a></section>`;
     return;
   }
-  if (record.service === "iching") {
-    window.dispatchEvent(new CustomEvent("vekai:paid-record", { detail: { record } }));
-    location.hash = "#cal";
+  const payload = record.result;
+  if (record.service === "pentagon") {
+    page.innerHTML = `<section class="portal-page-card portal-page-card--wide"><p class="eyebrow">${escapeHtml(t().serviceName.pentagon)} / ${new Date(record.createdAt).toLocaleString("zh-TW")}</p>
+      <h1>五軸解讀</h1>${pentagonMarkup(payload)}</section>`;
     return;
   }
-  const payload = record.result;
+  if (record.service === "sequence") {
+    page.innerHTML = `<section class="portal-page-card portal-page-card--wide"><p class="eyebrow">${escapeHtml(t().serviceName.sequence)} / ${new Date(record.createdAt).toLocaleString("zh-TW")}</p>
+      <h1>二十數解讀</h1><p class="micro-note">輸入：${payload.numbers.map((number) => escapeHtml(number)).join("、")}</p>${resultMarkup({ result: payload.result })}</section>`;
+    return;
+  }
   page.innerHTML = `<section class="portal-page-card portal-page-card--wide"><p class="eyebrow">${escapeHtml(t().serviceName.numerology)} / ${new Date(record.createdAt).toLocaleString("zh-TW")}</p>
     <h1>${t().result}</h1>${resultMarkup(payload)}</section>`;
 }
@@ -319,23 +355,23 @@ async function routePage() {
   const hash = location.hash.replace(/^#\/?/, "");
   const numberProduct = document.querySelector("#number-product");
   const page = document.querySelector("#portal-page");
-  const showApp = hash === "home" || hash === "" || hash === "cal" || hash === "iching";
+  const showReadings = hash === "home" || hash === "" || hash === "readings";
   const showNumber = hash === "home" || hash === "" || hash === "numerology";
-  const activeSection = hash === "cal" || hash === "iching" ? "cal" : "number";
+  const activeSection = hash === "readings" ? "readings" : "number";
   document.body.dataset.portalView = activeSection;
   document.querySelectorAll(".portal-app-switch a").forEach((link) => {
-    if (link.getAttribute("href") === (activeSection === "cal" ? "#cal" : "#numerology")) {
+    if (link.getAttribute("href") === (activeSection === "readings" ? "#readings" : "#numerology")) {
       link.setAttribute("aria-current", "page");
     } else {
       link.removeAttribute("aria-current");
     }
   });
   numberProduct.hidden = !showNumber;
-  calApp.hidden = hash !== "home" && hash !== "" && hash !== "cal" && hash !== "iching";
-  page.hidden = showApp;
+  calApp.hidden = !showReadings;
+  page.hidden = showNumber || showReadings;
   if (showNumber && hash === "numerology") numberProduct.scrollIntoView({ behavior: "smooth" });
-  if (hash === "cal" || hash === "iching") calApp.scrollIntoView({ behavior: "smooth" });
-  if (showApp) return;
+  if (hash === "readings") calApp.scrollIntoView({ behavior: "smooth" });
+  if (showNumber || showReadings) return;
   if (hash === "numerology") {
     numberProduct.scrollIntoView({ behavior: "smooth" });
     return;
@@ -373,14 +409,15 @@ async function startCheckout(service, input, locale) {
     location.hash = "#account";
     return;
   }
-  if (!state.config.checkoutAvailable) {
-    throw new Error("付款服務尚未完成設定，請稍後再試。");
-  }
-  const { checkoutUrl } = await api("/api/billing/checkout", {
+  const payload = await api("/api/billing/checkout", {
     method: "POST",
     body: JSON.stringify({ service, input, locale }),
   });
-  location.assign(checkoutUrl);
+  if (payload.checkoutUrl) {
+    location.assign(payload.checkoutUrl);
+    return;
+  }
+  location.hash = `#result/${encodeURIComponent(payload.readingId)}`;
 }
 
 async function completeSignIn(user) {
@@ -389,17 +426,13 @@ async function completeSignIn(user) {
   if (state.pendingCalculation) {
     const pending = state.pendingCalculation;
     state.pendingCalculation = null;
-    if (state.config.checkoutAvailable) {
-      try {
-        await startCheckout(pending.service, pending.input, pending.locale);
-        return;
-      } catch (error) {
-        state.notice = error.message;
-      }
-    } else {
-      state.notice = "Payment setup is incomplete. Your calculation has not been charged.";
+    try {
+      await startCheckout(pending.service, pending.input, pending.locale);
+      return;
+    } catch (error) {
+      state.notice = error.message;
     }
-    location.hash = pending.service === "iching" ? "#cal" : "#numerology";
+    location.hash = pending.service === "numerology" ? "#numerology" : "#readings";
   } else if (location.hash !== "#admin") {
     location.hash = "#profile";
   }
@@ -443,7 +476,7 @@ async function handleCheckoutReturn() {
   const readingId = params.get("readingId");
   if (checkout === "cancel") {
     alert("付款已取消，尚未收取費用。");
-    history.replaceState(null, "", `${location.pathname}#cal`);
+        history.replaceState(null, "", `${location.pathname}#readings`);
   } else if (checkout === "success" && readingId) {
     history.replaceState(null, "", `${location.pathname}#result/${encodeURIComponent(readingId)}`);
     await safeRoutePage();
@@ -497,9 +530,13 @@ portal.addEventListener("submit", async (event) => {
         await completeSignIn(result.user);
       } else if (form.dataset.mode === "signup") {
         state.authIdentifier = data.identifier;
-        await api("/api/auth/signup", { method: "POST", body: JSON.stringify(data) });
-        state.awaitingVerification = true;
-        await safeRoutePage();
+        const result = await api("/api/auth/signup", { method: "POST", body: JSON.stringify(data) });
+        if (result.user) {
+          await completeSignIn(result.user);
+        } else {
+          state.awaitingVerification = true;
+          await safeRoutePage();
+        }
       } else {
         const result = await api("/api/auth/login", { method: "POST", body: JSON.stringify(data) });
         await completeSignIn(result.user);
@@ -583,18 +620,11 @@ window.addEventListener("vekai:theme-change", (event) => {
   button.innerHTML = `<span aria-hidden="true">${themeIsNight ? "☀" : "☾"}</span><span>${themeIsNight ? "日間" : "夜間"}</span>`;
 });
 window.addEventListener("vekai:login-required", () => { location.hash = "#account"; });
-window.addEventListener("vekai:request-iching-checkout", async (event) => {
+window.addEventListener("vekai:request-checkout", async (event) => {
   try {
-    await startCheckout("iching", event.detail, "zh-TW");
+    await startCheckout(event.detail.service, event.detail.input, event.detail.locale || "zh-TW");
   } catch (error) {
     window.dispatchEvent(new CustomEvent("vekai:checkout-error", { detail: { message: error.message } }));
-  }
-});
-
-window.addEventListener("vekai:paid-record", (event) => {
-  const result = event.detail?.record?.result;
-  if (result) {
-    window.dispatchEvent(new CustomEvent("vekai:load-iching-result", { detail: { result } }));
   }
 });
 

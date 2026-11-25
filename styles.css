@@ -399,7 +399,7 @@ body[data-portal-view="number"] #portal .portal-main { padding-top: var(--portal
 .cal-followup { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-top: 34px; padding: 20px 24px; border: 1px solid var(--line); color: var(--paper); }
 .cal-followup strong { font-family: var(--serif); font-size: 16px; font-weight: 400; }
 #app { scroll-margin-top: 90px; }
-body[data-portal-view="cal"] #app { padding-top: var(--portal-bar-height, 76px); }
+body[data-portal-view="readings"] #app { padding-top: var(--portal-bar-height, 76px); }
 #app .workspace, #archive { scroll-margin-top: 96px; }
 #app .hero { min-height: 330px; padding-top: 60px; }
 .portal-page-card { width: min(700px, 100%); margin: 70px auto; }
@@ -461,4 +461,19 @@ body[data-portal-view="cal"] #app { padding-top: var(--portal-bar-height, 76px);
   .portal-account-links { gap: 5px; }
   .portal-account-links a { font-size: 7px; }
   .portal-theme-toggle > span:last-child { display: none; }
+}
+.paid-products { padding: 12px 0 70px; }
+.paid-products h2, .paid-products h3 { margin: 0 0 8px; font-family: var(--serif); font-weight: 500; }
+.paid-products__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 22px; }
+.number-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 14px 0; }
+.number-cell { display: grid; gap: 4px; color: var(--muted); font-size: 11px; }
+.number-cell input { width: 100%; min-height: 40px; }
+.radar { width: min(100%, 420px); height: auto; margin: 8px auto 16px; display: block; }
+.radar__grid { fill: none; stroke: var(--line); stroke-width: 1; }
+.radar__score { fill: rgba(201, 169, 110, .28); stroke: var(--gold-bright); stroke-width: 2; }
+.radar text { fill: var(--text-secondary); font-size: 8px; }
+.reading-tags { list-style: none; padding: 0; margin: 0 0 12px; }
+@media (max-width: 800px) {
+  .paid-products__grid { grid-template-columns: 1fr; }
+  .number-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

@@ -1,10 +1,10 @@
 # Vekai
 
-Vekai brings the number-based calculation service and Vekai Cal together under one site. The number calculator appears first; the I Ching Cal ritual follows. Visitors can preview both locally. In production, each delivered result is a separate HKD 81 Stripe Checkout purchase and is saved to the signed-in account.
+Vekai brings the number calculator and two login-backed readings together. Visitors can preview the number calculator locally. The HK$89 five-axis reading and the HK$390 twenty-number reading require a signed-in account. Without Stripe keys, those purchases are recorded as paid immediately in HKD.
 
 ## Run locally
 
-Requires Node.js 18 or newer.
+Requires Node.js 22 or newer.
 
 ```sh
 npm install
@@ -12,7 +12,7 @@ cp .env.example .env
 npm run dev
 ```
 
-Open [http://localhost:4173](http://localhost:4173). The calculation previews work without a database. Account creation, cloud records, and checkout require a PostgreSQL `DATABASE_URL`, verification-provider credentials, and Stripe credentials. Set `PAYWALL_ENABLED=true` only when Stripe is ready; production defaults to requiring checkout.
+Open [http://localhost:4173](http://localhost:4173). The number preview works immediately. Account creation uses a local SQLite file at `data/vekai.sqlite` when `DATABASE_URL` is empty, and applies its schema on startup. Outside production, sign-up marks the account verified when Resend or Twilio credentials are absent, so login works without those keys. Set `DATABASE_URL` to use PostgreSQL instead. Set `PAYWALL_ENABLED=true` only when Stripe is ready for the number calculator; the two paid readings do not call Stripe.
 
 ## Render deployment
 
@@ -28,15 +28,15 @@ Create a Render Web Service from this repository and a Render PostgreSQL databas
 - `RESEND_API_KEY` and `EMAIL_FROM` for email verification
 - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` for mobile verification
 
-The database schema is applied on server startup. Configure a Stripe webhook at `https://<your-render-domain>/api/payments/stripe/webhook` for `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, and `checkout.session.expired`.
+The database schema is applied on server startup. The five-axis reading is HK$89 and the twenty-number reading is HK$390; both are stored as paid transactions in HKD. The number calculator remains HK$81 per result when the paywall is enabled. Configure a Stripe webhook at `https://<your-render-domain>/api/payments/stripe/webhook` for `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, and `checkout.session.expired` if the number calculator uses Checkout.
 
-The current price is server-controlled at HKD 81 per result for either service. Stripe Checkout hosts card entry; Vekai never receives or stores card details. Do not put credentials in the repository or browser code.
+Stripe Checkout hosts card entry for that calculator; Vekai never receives or stores card details. Do not put credentials in the repository or browser code.
 
 ## Accounts and records
 
-Users may register with either a verified email address or an international mobile number (`+` country code) and password. Email codes use Resend; SMS codes use Twilio. Passwords are stored as scrypt hashes and browser sessions use HttpOnly, SameSite cookies. If provider credentials are absent, sign-up reports that verification is not configured.
+Users may register with either an email address or an international mobile number (`+` country code) and password. When verification providers are configured, email codes use Resend and SMS codes use Twilio. Passwords are stored as scrypt hashes and browser sessions use HttpOnly, SameSite cookies.
 
-Display name and gender identity are optional profile fields. Paid calculation results and associated transaction records are tied to the account and can be reopened from My Results. Number inputs are used to calculate the result but the original sequence is omitted from saved result data. The existing optional device-only encrypted I Ching archive remains available for local readings.
+Display name and gender identity are optional profile fields. Paid readings and transaction records (amount, HKD, product, status, timestamps, user id) are tied to the account and can be reopened from My Results. Number-calculator inputs are used to calculate the result but the original sequence is omitted from saved result data.
 
 ## 管理後台
 
@@ -44,7 +44,7 @@ Display name and gender identity are optional profile fields. Paid calculation r
 
 ## Services and languages
 
-網站介面與新解讀目前僅提供繁體中文。舊版多語系解讀仍保留相容性；健康相關卦象內容僅供文化參考，並非醫療建議。
+網站介面與新解讀目前僅提供繁體中文。五軸解讀請選擇五個標籤並輸入五個數字，伺服器回傳 relationship、Luck/career、health、wealthy、general 五軸分數。二十數解讀輸入二十個數字，分數由同一套數字測算得出。
 
 ## Validation
 

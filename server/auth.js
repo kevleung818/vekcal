@@ -322,6 +322,19 @@ export async function signup(request, response) {
     throw error;
   }
   const user = { id, email: identifier.type === "email" ? identifier.value : null, phone: identifier.type === "phone" ? identifier.value : null };
+  const providersReady = identifier.type === "email"
+    ? Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM)
+    : Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_NUMBER);
+  if (process.env.NODE_ENV !== "production" && !providersReady) {
+    await db.query(
+      "update users set email_verified = true, phone_verified = true where id = $1",
+      [id],
+    );
+    await createSession(id, response);
+    const stored = await db.query("select * from users where id = $1", [id]);
+    response.status(201).json({ verificationRequired: false, user: safeUser(stored.rows[0]) });
+    return;
+  }
   await sendCode(user, "signup");
   response.status(201).json({ verificationRequired: true, message: "驗證碼已發送至你的帳戶聯絡方式。" });
 }
