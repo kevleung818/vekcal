@@ -1,3 +1,3 @@
-export function isBillingRequired(env = process.env) {
-  return env.NODE_ENV === "production";
+export function isBillingRequired() {
+  return true;
 }

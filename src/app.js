@@ -405,33 +405,6 @@ async function castLine() {
   if (state.lines.length === 6) {
     state.reading = null;
     state.phase = "checkout";
-    try {
-      const response = await fetch("/api/config");
-      if (!response.ok) throw new Error(`Billing configuration check failed (${response.status}).`);
-      const config = await response.json();
-      if (!config.billingRequired) {
-        const preview = await fetch("/api/iching/preview", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            lines: state.lines,
-            question: state.question,
-            method: state.method,
-            category: state.category,
-            language: state.language,
-            locale: "zh-TW",
-          }),
-        });
-        if (!preview.ok) throw new Error(`Reading preview failed (${preview.status}).`);
-        state.reading = await preview.json();
-        state.phase = "result";
-      }
-    } catch (error) {
-      console.error("I Ching reading could not be loaded.", error);
-      state.reading = null;
-      state.phase = "checkout";
-      notify("無法取得卦象解讀，請完成付款或稍後再試。", "error");
-    }
   }
   render();
   if (state.phase === "result") {

@@ -3,14 +3,14 @@ import assert from "node:assert/strict";
 import { isBillingRequired } from "../server/billing-policy.js";
 import { rateLimit } from "../server/rate-limit.js";
 
-test("production always requires payment, even when the old flag is false", () => {
+test("paid readings stay gated in every environment", () => {
   assert.equal(isBillingRequired({ NODE_ENV: "production", PAYWALL_ENABLED: "false" }), true);
-  assert.equal(isBillingRequired({ NODE_ENV: "production" }), true);
-  assert.equal(isBillingRequired({ NODE_ENV: "development", PAYWALL_ENABLED: "false" }), false);
+  assert.equal(isBillingRequired({ NODE_ENV: "development" }), true);
+  assert.equal(isBillingRequired({}), true);
 });
 
 test("calculation requests are rejected after the limit", () => {
-  const limit = rateLimit({ windowMs: 60_000, max: 2, name: "test-calculation" });
+  const limit = rateLimit({ windowMs: 60_000, max: 2, name: `test-calculation-${Date.now()}-${Math.random()}` });
   const calls = [];
   const request = { ip: "203.0.113.5" };
   for (let index = 0; index < 3; index += 1) {

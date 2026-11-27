@@ -1,6 +1,6 @@
 # Vekai
 
-Vekai brings the number-based calculation service and Vekai Cal together under one site. The number calculator appears first; the I Ching Cal ritual follows. Visitors can preview both locally. In production, each delivered result is a separate HKD 81 Stripe Checkout purchase and is saved to the signed-in account.
+Vekai brings the number-based calculation service and Vekai Cal together under one site. The number calculator appears first; the I Ching Cal ritual follows. Each delivered result is an HKD 81 Stripe Checkout purchase and is saved to the signed-in account.
 
 ## Run locally
 
@@ -12,7 +12,7 @@ cp .env.example .env
 npm run dev
 ```
 
-Open [http://localhost:4173](http://localhost:4173). The calculation previews work without a database. Account creation, cloud records, and checkout require a PostgreSQL `DATABASE_URL`, verification-provider credentials, and Stripe credentials. Production always requires checkout for each delivered result.
+Open [http://localhost:4173](http://localhost:4173). The pages load without a database. Delivered readings always require a signed-in account and Stripe Checkout, including when `NODE_ENV` is not `production`. Account creation, cloud records, and checkout require a PostgreSQL `DATABASE_URL`, verification-provider credentials, and Stripe credentials.
 
 ## Render deployment
 

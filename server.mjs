@@ -2,10 +2,8 @@ import "dotenv/config";
 import express from "express";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { calculateNumerology } from "./server/calculation-service.js";
 import { getAdminDashboard, requireAdmin } from "./server/admin.js";
 import {
-  buildReadingResult,
   getReading,
   handleStripeWebhook,
   listReadings,
@@ -40,6 +38,18 @@ app.use((_request, response, next) => {
   response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   response.setHeader("X-Frame-Options", "DENY");
   response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  response.setHeader("Content-Security-Policy", [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data:",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join("; "));
   if (production) response.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   next();
 });
@@ -90,23 +100,13 @@ app.get("/api/records/:id", requireUser, route(getReading));
 app.get("/api/transactions", requireUser, route(listTransactions));
 app.get("/api/admin/dashboard", requireUser, requireAdmin, route(getAdminDashboard));
 
-app.post("/api/calculations", limitCalculation, route(async (request, response) => {
-  if (isBillingRequired()) {
-    return response.status(402).json({ error: "請登入並完成付款，以取得測算結果。" });
-  }
-  const { input, locale = "zh-TW" } = request.body || {};
-  const calculationLocale = locale === "zh-Hant" || locale === "zh-HK" ? "zh-TW" : locale;
-  const result = calculateNumerology(input, { locale: calculationLocale });
-  response.json({ locale, result });
-}));
+app.post("/api/calculations", limitCalculation, (_request, response) => {
+  response.status(402).json({ error: "請登入並完成付款，以取得測算結果。" });
+});
 
-app.post("/api/iching/preview", limitCalculation, route(async (request, response) => {
-  if (isBillingRequired()) {
-    return response.status(402).json({ error: "請登入並完成付款，以取得卦象解讀。" });
-  }
-  const locale = String(request.body?.locale ?? "zh-TW");
-  response.json(buildReadingResult("iching", request.body, locale));
-}));
+app.post("/api/iching/preview", limitCalculation, (_request, response) => {
+  response.status(402).json({ error: "請登入並完成付款，以取得卦象解讀。" });
+});
 
 app.use("/api", (_request, response) => response.status(404).json({ error: "找不到此 API 端點。" }));
 app.use("/src", express.static(resolve(root, "src"), { dotfiles: "deny" }));
