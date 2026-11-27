@@ -1,4 +1,4 @@
-const CACHE_NAME = "vekai-cal-v19";
+const CACHE_NAME = "vekai-cal-v20";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -7,8 +7,6 @@ const APP_SHELL = [
   "./src/portal.js",
   "./src/core.js",
   "./src/archive.js",
-  "./src/interpretations.js",
-  "./src/hexagram-details.js",
   "./manifest.webmanifest",
   "./favicon.svg",
 ];

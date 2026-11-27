@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { calculateNumerology } from "./server/calculation-service.js";
 import { getAdminDashboard, requireAdmin } from "./server/admin.js";
 import {
+  buildReadingResult,
   getReading,
   handleStripeWebhook,
   listReadings,
@@ -23,7 +24,9 @@ import {
   updateProfile,
   verifyAccount,
 } from "./server/auth.js";
+import { isBillingRequired } from "./server/billing-policy.js";
 import { initializeDatabase, pool } from "./server/db.js";
+import { rateLimit } from "./server/rate-limit.js";
 
 const app = express();
 const root = resolve(fileURLToPath(new URL(".", import.meta.url)));
@@ -56,8 +59,11 @@ app.use("/api", (_request, response, next) => {
   next();
 });
 
+const limitAuth = rateLimit({ windowMs: 10 * 60 * 1000, max: 8, name: "auth" });
+const limitCalculation = rateLimit({ windowMs: 60 * 1000, max: 20, name: "calculation" });
+
 app.get("/api/config", (_request, response) => {
-  const billingRequired = production && process.env.PAYWALL_ENABLED !== "false";
+  const billingRequired = isBillingRequired();
   response.json({
     billingRequired,
     checkoutAvailable: Boolean(pool && process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET && process.env.APP_URL),
@@ -69,10 +75,10 @@ app.get("/api/config", (_request, response) => {
 app.post("/api/payments/stripe/webhook", express.raw({ type: "application/json", limit: "256kb" }), route(handleStripeWebhook));
 app.use(express.json({ limit: "32kb", strict: true }));
 
-app.post("/api/auth/signup", route(signup));
-app.post("/api/auth/verify", route(verifyAccount));
-app.post("/api/auth/resend-verification", route(resendVerification));
-app.post("/api/auth/login", route(login));
+app.post("/api/auth/signup", limitAuth, route(signup));
+app.post("/api/auth/verify", limitAuth, route(verifyAccount));
+app.post("/api/auth/resend-verification", limitAuth, route(resendVerification));
+app.post("/api/auth/login", limitAuth, route(login));
 app.post("/api/auth/logout", route(logout));
 app.get("/api/auth/github", startGithubAdminLogin);
 app.get("/api/auth/github/callback", route(finishGithubAdminLogin));
@@ -84,14 +90,22 @@ app.get("/api/records/:id", requireUser, route(getReading));
 app.get("/api/transactions", requireUser, route(listTransactions));
 app.get("/api/admin/dashboard", requireUser, requireAdmin, route(getAdminDashboard));
 
-app.post("/api/calculations", route(async (request, response) => {
-  if (production && process.env.PAYWALL_ENABLED !== "false") {
+app.post("/api/calculations", limitCalculation, route(async (request, response) => {
+  if (isBillingRequired()) {
     return response.status(402).json({ error: "請登入並完成付款，以取得測算結果。" });
   }
   const { input, locale = "zh-TW" } = request.body || {};
   const calculationLocale = locale === "zh-Hant" || locale === "zh-HK" ? "zh-TW" : locale;
   const result = calculateNumerology(input, { locale: calculationLocale });
   response.json({ locale, result });
+}));
+
+app.post("/api/iching/preview", limitCalculation, route(async (request, response) => {
+  if (isBillingRequired()) {
+    return response.status(402).json({ error: "請登入並完成付款，以取得卦象解讀。" });
+  }
+  const locale = String(request.body?.locale ?? "zh-TW");
+  response.json(buildReadingResult("iching", request.body, locale));
 }));
 
 app.use("/api", (_request, response) => response.status(404).json({ error: "找不到此 API 端點。" }));

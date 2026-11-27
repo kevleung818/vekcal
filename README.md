@@ -12,7 +12,7 @@ cp .env.example .env
 npm run dev
 ```
 
-Open [http://localhost:4173](http://localhost:4173). The calculation previews work without a database. Account creation, cloud records, and checkout require a PostgreSQL `DATABASE_URL`, verification-provider credentials, and Stripe credentials. Set `PAYWALL_ENABLED=true` only when Stripe is ready; production defaults to requiring checkout.
+Open [http://localhost:4173](http://localhost:4173). The calculation previews work without a database. Account creation, cloud records, and checkout require a PostgreSQL `DATABASE_URL`, verification-provider credentials, and Stripe credentials. Production always requires checkout for each delivered result.
 
 ## Render deployment
 
@@ -23,7 +23,6 @@ Create a Render Web Service from this repository and a Render PostgreSQL databas
 - `DATABASE_URL` from the Render PostgreSQL connection string
 - `ADMIN_EMAILS` as a comma-separated allowlist of administrator account email addresses
 - `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` from a GitHub OAuth App with callback URL `<APP_URL>/api/auth/github/callback`
-- `PAYWALL_ENABLED=true`
 - `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` from Stripe (test keys first)
 - `RESEND_API_KEY` and `EMAIL_FROM` for email verification
 - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` for mobile verification

@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node server.mjs",
     "start": "node server.mjs",
-    "check": "node --check server.mjs && node --check server/admin.js && node --check server/auth.js && node --check server/db.js && node --check server/payments.js && node --check server/calculation-service.js && node --check src/app.js && node --check src/portal.js",
+    "check": "node --check server.mjs && node --check server/admin.js && node --check server/auth.js && node --check server/billing-policy.js && node --check server/db.js && node --check server/focus.js && node --check server/payments.js && node --check server/rate-limit.js && node --check server/calculation-service.js && node --check server/interpretations.js && node --check server/hexagram-details.js && node --check src/app.js && node --check src/portal.js",
     "test": "node --test"
   },
   "dependencies": {
