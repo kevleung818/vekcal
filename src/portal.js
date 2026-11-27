@@ -53,7 +53,7 @@ const state = {
   awaitingVerification: false,
   pendingCalculation: null,
   notice: "",
-  config: { billingRequired: false, checkoutAvailable: false },
+  config: { billingRequired: true, checkoutAvailable: false },
   records: [],
 };
 

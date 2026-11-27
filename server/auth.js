@@ -327,16 +327,19 @@ export async function signup(request, response) {
 }
 
 export async function resendVerification(request, response) {
-  const db = requireDatabase();
   const identifier = normalizeIdentifier(request.body?.identifier);
   const column = identifier.type === "email" ? "email" : "phone";
-  const userResult = await db.query(`select * from users where ${column} = $1`, [identifier.value]);
+  const userResult = await requireDatabase().query(`select * from users where ${column} = $1`, [identifier.value]);
   const user = userResult.rows[0];
-  if (!user) throw httpError("找不到相符的帳戶。", 404);
-  const verified = identifier.type === "email" ? user.email_verified : user.phone_verified;
-  if (verified) throw httpError("此帳戶已完成驗證，請直接登入。", 409);
-  await sendCode(user, "signup");
-  response.json({ verificationRequired: true, message: "新的驗證碼已發送。" });
+  const verified = user && (identifier.type === "email" ? user.email_verified : user.phone_verified);
+  if (user && !verified) {
+    try {
+      await sendCode(user, "signup");
+    } catch (error) {
+      console.error("Verification resend could not be delivered.");
+    }
+  }
+  response.json({ verificationRequired: true, message: "若帳戶尚未完成驗證，新的驗證碼會發送到你的聯絡方式。" });
 }
 
 export async function verifyAccount(request, response) {

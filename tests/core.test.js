@@ -3,22 +3,21 @@ import assert from "node:assert/strict";
 import {
   castThreeCoins,
   castYao,
-  describeFocus,
   formatHexagramOrdinal,
-  getInterpretationFocus,
   hexagramList,
   resolveHexagrams,
 } from "../src/core.js";
+import { describeFocus, getInterpretationFocus } from "../server/focus.js";
 import {
   getCategoryInterpretation,
   INTERPRETATION_CATEGORIES,
   INTERPRETATIONS,
-} from "../src/interpretations.js";
+} from "../server/interpretations.js";
 import {
   getHexagramDetails,
   HEXAGRAM_DETAILS,
   HEXAGRAM_DETAIL_FIELDS,
-} from "../src/hexagram-details.js";
+} from "../server/hexagram-details.js";
 
 const linesFor = (values) => values.map((value) => ({
   value,

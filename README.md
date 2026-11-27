@@ -1,6 +1,6 @@
 # Vekai
 
-Vekai brings the number-based calculation service and Vekai Cal together under one site. The number calculator appears first; the I Ching Cal ritual follows. Visitors can preview both locally. In production, each delivered result is a separate HKD 81 Stripe Checkout purchase and is saved to the signed-in account.
+Vekai brings the number-based calculation service and Vekai Cal together under one site. The number calculator appears first; the I Ching Cal ritual follows. Each delivered result is an HKD 81 Stripe Checkout purchase and is saved to the signed-in account.
 
 ## Run locally
 
@@ -12,7 +12,7 @@ cp .env.example .env
 npm run dev
 ```
 
-Open [http://localhost:4173](http://localhost:4173). The calculation previews work without a database. Account creation, cloud records, and checkout require a PostgreSQL `DATABASE_URL`, verification-provider credentials, and Stripe credentials. Set `PAYWALL_ENABLED=true` only when Stripe is ready; production defaults to requiring checkout.
+Open [http://localhost:4173](http://localhost:4173). The pages load without a database. Delivered readings always require a signed-in account and Stripe Checkout, including when `NODE_ENV` is not `production`. Account creation, cloud records, and checkout require a PostgreSQL `DATABASE_URL`, verification-provider credentials, and Stripe credentials.
 
 ## Render deployment
 
@@ -23,7 +23,6 @@ Create a Render Web Service from this repository and a Render PostgreSQL databas
 - `DATABASE_URL` from the Render PostgreSQL connection string
 - `ADMIN_EMAILS` as a comma-separated allowlist of administrator account email addresses
 - `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` from a GitHub OAuth App with callback URL `<APP_URL>/api/auth/github/callback`
-- `PAYWALL_ENABLED=true`
 - `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` from Stripe (test keys first)
 - `RESEND_API_KEY` and `EMAIL_FROM` for email verification
 - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` for mobile verification

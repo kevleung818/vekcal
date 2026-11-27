@@ -1,9 +1,7 @@
 import {
   castThreeCoins,
   castYao,
-  describeFocus,
   formatHexagramOrdinal,
-  getInterpretationFocus,
   resolveHexagrams,
 } from "./core.js";
 import {
@@ -15,14 +13,17 @@ import {
   saveReading,
   unlockArchive,
 } from "./archive.js";
-import {
-  getCategoryInterpretation,
-  INTERPRETATION_CATEGORIES,
-} from "./interpretations.js";
-import {
-  getHexagramDetails,
-  HEXAGRAM_DETAIL_FIELDS,
-} from "./hexagram-details.js";
+
+const INTERPRETATION_CATEGORIES = ["運勢", "愛情", "疾病", "失物", "訴訟"];
+const HEXAGRAM_DETAIL_FIELDS = [
+  ["shape", "卦形"],
+  ["omen", "卦象"],
+  ["fortune", "吉凶"],
+  ["interpretation", "解讀"],
+  ["guaCi", "卦辭"],
+  ["inference", "推斷"],
+  ["bigImage", "大象"],
+];
 
 const app = document.querySelector("#app");
 function loadTheme() {
@@ -51,6 +52,7 @@ const state = {
   archiveDialogMode: "create",
   archiveItems: [],
   saved: false,
+  reading: null,
 };
 
 const lineNames = ["初爻", "二爻", "三爻", "四爻", "五爻", "上爻"];
@@ -111,14 +113,8 @@ function hexagramMarkup(lines, changed = false) {
     .map((index) => lineMarkup(lines[index], index + 1, changed)).join("")}</div>`;
 }
 
-function currentResult() {
-  const { original, changed } = resultName(state.lines);
-  const focus = getInterpretationFocus(state.lines, original, changed);
-  return { original, changed, focus, guidance: describeFocus(focus, original, changed) };
-}
-
 function hexagramDetailCard(hexagram, title) {
-  const details = getHexagramDetails(hexagram.number, state.language);
+  const details = hexagram.details || {};
   const rows = HEXAGRAM_DETAIL_FIELDS
     .map(([key, label]) => `<div class="detail-row"><dt>${label}</dt><dd>${details[key] ? escapeHtml(details[key]) : '<span class="detail-unavailable">原典未提供此欄內容</span>'}</dd></div>`)
     .join("");
@@ -230,10 +226,18 @@ function phaseContent() {
 }
 
 function resultContent() {
-  const { original, changed, focus, guidance } = currentResult();
-  const categoryReading = state.category
-    ? getCategoryInterpretation(original.number, state.category, state.language)
-    : "";
+  const reading = state.reading;
+  if (!reading?.original?.details || !reading?.changed?.details || !reading.guidance) {
+    return `<section class="ritual-state" aria-labelledby="phase-title">
+      <div class="state-overline">04 / 安全付款</div>
+      <h2 id="phase-title">卦象解讀尚未開放。</h2>
+      <p class="muted-copy">完整解讀只在付款完成後，由伺服器送出。此頁不會保存未付款的卦辭。</p>
+      <div class="ritual-actions">${button("登入並付款 · HKD 81", "start-iching-checkout", "button button--primary")}
+        <button class="text-button" data-action="new-reading">重新開始 ↗</button></div>
+    </section>`;
+  }
+  const { original, changed } = reading;
+  const categoryReading = reading.categoryReading || "";
   const languageLabel = "繁體中文";
   return `<section class="ritual-state result-state" aria-labelledby="phase-title">
     <div class="state-overline">${state.method === "coins" ? "三錢法" : "大衍筮法"} · 卦象解讀 / #${String(original.number).padStart(2, "0")}</div>
@@ -241,16 +245,16 @@ function resultContent() {
     <p class="muted-copy">靜下來，觀察此刻正在發生的變化。</p>
     ${state.question ? `<div class="question-note"><span>你所問</span><p>${escapeHtml(state.question)}</p></div>` : ""}
     <div class="reading-pair">
-      <article class="reading-hex"><span class="eyebrow">本卦 · ${String(original.number).padStart(2, "0")}</span>${hexagramMarkup(state.lines)}<h3>${original.name}</h3><span>${original.upper.symbol}上${original.lower.symbol}下</span></article>
+      <article class="reading-hex"><span class="eyebrow">本卦 · ${String(original.number).padStart(2, "0")}</span>${hexagramMarkup(state.lines)}<h3>${escapeHtml(original.name)}</h3><span>${escapeHtml(original.upper?.symbol)}上${escapeHtml(original.lower?.symbol)}下</span></article>
       <span class="reading-arrow" aria-hidden="true">→</span>
-      <article class="reading-hex"><span class="eyebrow">之卦 · 變化</span>${hexagramMarkup(state.lines, true)}<h3>${changed.name} <span class="hexagram-ordinal">${formatHexagramOrdinal(changed.number)}</span></h3><span>${changed.upper.symbol}上${changed.lower.symbol}下</span></article>
+      <article class="reading-hex"><span class="eyebrow">之卦 · 變化</span>${hexagramMarkup(state.lines, true)}<h3>${escapeHtml(changed.name)} <span class="hexagram-ordinal">${escapeHtml(formatHexagramOrdinal(changed.number))}</span></h3><span>${escapeHtml(changed.upper?.symbol)}上${escapeHtml(changed.lower?.symbol)}下</span></article>
     </div>
     <section class="hexagram-details" aria-label="本卦與之卦詳解">
       ${hexagramDetailCard(original, "本卦詳解")}
       ${hexagramDetailCard(changed, "之卦詳解")}
     </section>
     ${state.language === "zh-Hant" ? '<p class="detail-source-note">繁體中文參考表未提供獨立的「解讀」與「卦辭」欄位；以上僅列出原表欄目。</p>' : ""}
-    <div class="guidance-card"><span class="eyebrow">朱熹解卦法 · ${focus.rule}</span><p>${guidance}</p><small>這是傳統研讀方向的提示，並非對未來的確定預言。</small></div>
+    <div class="guidance-card"><span class="eyebrow">朱熹解卦法</span><p>${escapeHtml(reading.guidance)}</p><small>這是傳統研讀方向的提示，並非對未來的確定預言。</small></div>
     ${categoryReading ? `<section class="category-reading" aria-labelledby="category-reading-title">
       <div class="category-reading__top"><span class="eyebrow" id="category-reading-title">${escapeHtml(state.category)} · 分類解讀</span><span>${languageLabel}</span></div>
       ${state.category === "疾病" ? '<p class="health-disclaimer">疾病分類內容僅供傳統文化參考，並非醫療診斷或治療建議，也不能用來預測病情。若有身體不適，請諮詢醫療專業人員；如有急症請立即求助。</p>' : ""}
@@ -399,16 +403,8 @@ async function castLine() {
   state.pendingCoins = null;
   playTone();
   if (state.lines.length === 6) {
-    try {
-      const response = await fetch("/api/config");
-      if (!response.ok) throw new Error(`Billing configuration check failed (${response.status}).`);
-      const config = await response.json();
-      state.phase = config.billingRequired ? "checkout" : "result";
-    } catch (error) {
-      console.error("Billing requirement could not be verified.", error);
-      state.phase = "checkout";
-      notify("無法確認付款狀態，請重試或稍後再試。", "error");
-    }
+    state.reading = null;
+    state.phase = "checkout";
   }
   render();
   if (state.phase === "result") {
@@ -424,7 +420,7 @@ async function castLine() {
 
 async function saveCurrentReading() {
   try {
-    const { original, changed } = currentResult();
+    const { original, changed } = resultName(state.lines);
     await saveReading({
       createdAt: new Date().toISOString(),
       question: state.question,
@@ -454,6 +450,7 @@ function resetReading() {
   state.isCasting = false;
   state.question = "";
   state.saved = false;
+  state.reading = null;
   state.breathActive = false;
   render();
   document.querySelector("#ritual")?.scrollIntoView({ behavior: "smooth" });
@@ -557,6 +554,7 @@ window.addEventListener("vekai:load-iching-result", (event) => {
   state.category = result.category;
   state.language = "zh-Hant";
   state.saved = true;
+  state.reading = result;
   state.phase = "result";
   render();
   requestAnimationFrame(() => document.querySelector(".hexagram-details")?.scrollIntoView({ behavior: "smooth", block: "start" }));
